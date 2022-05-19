@@ -27,6 +27,7 @@ def name_check(file):
         if file_extension in ['.xls', '.xlsx', '.xlsm', '.xlsb']: return False
         else: return True
     else: return True
+
 # вывод таблицы на форму
 def table_update():
     table.delete(*table.get_children())
@@ -37,6 +38,7 @@ def table_update():
         table.column(header,anchor='center')
     for row in data.values.tolist():
         table.insert('', tk.END, values=row)
+
 # открыть выбранный файл
 def select_file():
     if text.get() == '' or name_check(text.get()):
@@ -58,6 +60,7 @@ def select_file():
         # загрузка содержимого в датафрейм
         data = pd.read_excel(filename,0)
         table_update()
+
 # сохранение файла
 def save_file_as():
     filename = fd.asksaveasfilename(
@@ -66,7 +69,7 @@ def save_file_as():
         initialdir=r'C:\\')
     with pd.ExcelWriter(filename) as writer:
         data.to_excel(writer)
-    
+
 
 def rulew(vector, goal):
     goal
@@ -96,14 +99,17 @@ def ruleb(vector, goal):
 
 def rate_up():
     global data
-
+    # переводим зачет и незачет в числовые эквиваленты
     credit_map = {'незачет': 2, 'зачет': 3}
     data=data.replace(credit_map)
-
+    # отделяем цель (предполагаем что цель всегда 1 строка)
     goal = data.loc[0]['экзамен1':].values.tolist()
-    temp=newdata=data[1:].copy()
-    newdata['w'] = temp.apply(lambda x: rulew(x.loc['экзамен1':].values.tolist(), goal), axis =  1)
-    newdata['b'] = temp.apply(lambda x: ruleb(x.loc['экзамен1':].values.tolist(), goal), axis =  1)
+    # временный датафрейм для удобства вычислений
+    newdata=data[1:].copy()
+    # применяем формулы к данным
+    newdata['w'] = data.apply(lambda x: rulew(x.loc['экзамен1':].values.tolist(), goal), axis =  1)
+    newdata['b'] = data.apply(lambda x: ruleb(x.loc['экзамен1':].values.tolist(), goal), axis =  1)
+    # сортировка по убыванию
     data = newdata.sort_values(['b','w'],ascending=[False, False])
     save_button.configure(state=tk.ACTIVE)
     rate_button.configure(state=tk.DISABLED)
