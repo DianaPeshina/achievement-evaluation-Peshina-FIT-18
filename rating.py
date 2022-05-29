@@ -3,138 +3,218 @@ import datetime
 import math
 import pandas as pd
 import tkinter as tk
-from tkinter import StringVar, ttk
+from tkinter import StringVar, IntVar, ttk
 from tkinter import filedialog as fd
 
-data = pd.DataFrame()
+class GoalSetter(tk.Toplevel):
+    def __init__(self, parent, title_set):
+        super().__init__(parent)
+        self.destroy_ind = 0
+        self.title('Задание цели')
+        self.label_num=len(title_set)
+        self.minsize(200,self.label_num*27)
+        label_list=[]
+        self.text_list=[]
+        textbox_list=[]
+        for i in range(self.label_num):
+            label_list.append(tk.Label(self, text=str(title_set[i])).pack())
+            self.text_list.append(tk.StringVar(self))
+            textbox_list.append(ttk.Entry(self,textvariable=self.text_list[i]).pack())
+        btn = ttk.Button(self, text="Ок", command=self.values_check)
+        btn.pack()
+        self.protocol("WM_DELETE_WINDOW", self.handler)
 
-root = tk.Tk()
-root.title('Приложение: Рейтинг успеваемости')
-root.geometry('900x600')
-root.minsize(900,600)
+    def handler(self):
+        self.destroy_ind = 1
+        self.destroy()
 
-frame_filedialog = tk.Frame(root,width=150,height=30)
-frame_view = tk.Frame(root, width=150, height=150)
-frame_buttons = tk.Frame(root, width=150, height=30)
-frame_filedialog.place(relx=0, rely=0, relwidth=1, relheight=0.08)
-frame_view.place(relx=0, rely=0.08, relwidth=1, relheight=0.84)
-frame_buttons.place(relx=0, rely=0.92, relwidth=1, relheight=0.08)
+    def values_check(self):
+        self.destroy_ind = 0
+        for i in range(self.label_num):
+            if not (('.' in self.text_list[i].get() and self.text_list[i].get().replace('.', '').isdigit())
+                    or self.text_list[i].get().isdigit() 
+                    or self.text_list[i].get() in ['зачет','незачет']):
+                tk.messagebox.showinfo(title='Ошибка', message='Проверьте введенные данные')
+                return
+        self.destroy()
+            
+    def open(self):
+        self.grab_set()
+        self.wait_window()
+        goal=[]
+        for i in range(self.label_num):
+            if '.' in self.text_list[i].get() and self.text_list[i].get().replace('.', '').isdigit():
+                goal.append(float(self.text_list[i].get()))
+            elif self.text_list[i].get().isdigit():
+                goal.append(int(self.text_list[i].get()))
+            elif self.text_list[i].get() == '': goal.append(1)
+            else: goal.append(0)
+        return goal, self.destroy_ind
 
-# проверка имени файла в строке на существование и тип
-def name_check(file):
-    if os.path.exists(file):
-        filename, file_extension = os.path.splitext(file)
-        if file_extension in ['.xls', '.xlsx', '.xlsm', '.xlsb']: return False
-        else: return True
-    else: return True
-
-# вывод таблицы на форму
-def table_update():
-    table.delete(*table.get_children())
-    headers=data.columns.values.tolist()
-    table['columns'] = headers
-    for header in headers:
-        table.heading(header, text=header, anchor='center')
-        table.column(header,anchor='center')
-    for row in data.values.tolist():
-        table.insert('', tk.END, values=row)
-
-# открыть выбранный файл
-def select_file():
-    if text.get() == '' or name_check(text.get()):
-        filetypes = (
-            ('Excel Files', '*.xls *.xlsx *.xlsm *.xlsb'),
-            ('All Files', '*.*')
-        )
-        filename = fd.askopenfilename(
-            title='Выберите файл',
-            initialdir=r'C:\\',
-            filetypes=filetypes)
-        text.set(filename)
-    else: filename = text.get()
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.data = pd.DataFrame()
+        self.title('Приложение: Рейтинг успеваемости')
+        self.geometry('900x600')
+        self.minsize(900,600)
+        self.frame_filedialog = tk.Frame(self,width=150,height=30)
+        self.frame_view = tk.Frame(self, width=150, height=150)
+        self.frame_buttons = tk.Frame(self, width=150, height=30)
+        self.frame_filedialog.place(relx=0, rely=0, relwidth=1, relheight=0.08)
+        self.frame_view.place(relx=0, rely=0.08, relwidth=1, relheight=0.84)
+        self.frame_buttons.place(relx=0, rely=0.92, relwidth=1, relheight=0.08)
+        self.open_button = ttk.Button(self.frame_filedialog, text='Открыть файл', command=self.select_file)
+        self.text = tk.StringVar(self.frame_filedialog)
+        self.open_textbox = ttk.Entry(self.frame_filedialog,textvariable=self.text)
+        self.open_textbox.place(relx=0.01, rely=0.2, relwidth=0.6, relheight=0.6)
+        self.open_button.place(relx=0.62, rely=0.2, relwidth=0.15, relheight=0.6)
+        # место для отображения таблицы с данными
+        self.table = ttk.Treeview(self.frame_view, show='headings')
+        self.scroll_pane_y =ttk.Scrollbar(self.frame_view, command=self.table.yview)
+        self.scroll_pane_x =ttk.Scrollbar(self.frame_view, command=self.table.xview, orient='horizontal')
+        self.table.configure(yscrollcommand=self.scroll_pane_y.set, xscrollcommand=self.scroll_pane_x.set)
+        self.scroll_pane_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.scroll_pane_x.pack(side=tk.BOTTOM, fill=tk.X)
+        self.table.pack(expand=tk.YES, fill=tk.BOTH)
+        #конпки сохранения и оценки 
+        self.no_goal = IntVar()
+        self.no_pass = IntVar()
+        self.flunk_button = ttk.Checkbutton(self.frame_buttons, text="Учитывать неуспевающих студентов", variable=self.no_pass).place(relx=0.23, rely=0.2,relheight=0.6)
+        self.goal_button = ttk.Checkbutton(self.frame_buttons, text="Ввести цель вручную", variable=self.no_goal).place(relx=0.03, rely=0.2,relheight=0.6)
+        self.rate_button = ttk.Button(self.frame_buttons,text='Рейтинг',command = self.rate_up)
+        self.save_button = ttk.Button(self.frame_buttons, state=tk.DISABLED, text='Сохранить как',command=self.save_file_as)
+        self.rate_button.place(relx=0.83, rely=0.2,relwidth=0.15, relheight=0.6)
+        self.save_button.place(relx=0.65, rely=0.2,relwidth=0.15, relheight=0.6)
     
-    if filename != '':
-        global data
-        save_button.configure(state=tk.DISABLED)
-        rate_button.configure(state=tk.ACTIVE)
-        # загрузка содержимого в датафрейм
-        data = pd.read_excel(filename,0)
-        table_update()
+    # проверка имени файла в строке на существование и тип
+    def name_check(self, file):
+        if os.path.exists(file):
+            filename, file_extension = os.path.splitext(file)
+            if file_extension in ['.xls', '.xlsx', '.xlsm', '.xlsb']: return False
+            else: return True
+        else: return True
 
-# сохранение файла
-def save_file_as():
-    filename = fd.asksaveasfilename(
-        initialfile ="Рейтинг"+str(datetime.date.today()),
-        defaultextension=".xlsx",
-        initialdir=r'C:\\')
-    with pd.ExcelWriter(filename) as writer:
-        data.to_excel(writer)
+    # вывод таблицы на форму
+    def table_update(self):
+        self.table.delete(*self.table.get_children())
+        headers=self.data.columns.values.tolist()
+        self.table['columns'] = headers
+        for header in headers:
+            self.table.heading(header, text=header, anchor='center')
+            self.table.column(header,anchor='center')
+        for row in self.data.values.tolist():
+            self.table.insert('', tk.END, values=row)
 
+    # открыть выбранный файл
+    def select_file(self):
+        if self.text.get() == '' or self.name_check(self.text.get()):
+            filetypes = (
+                ('Excel Files', '*.xls *.xlsx *.xlsm *.xlsb'),
+                ('All Files', '*.*')
+            )
+            filename = fd.askopenfilename(
+                title='Выберите файл',
+                initialdir=r'C:\\',
+                filetypes=filetypes)
+            self.text.set(filename)
+        else: filename = self.text.get()
+        
+        if filename != '':
+            self.save_button.configure(state=tk.DISABLED)
+            self.rate_button.configure(state=tk.ACTIVE)
+            # загрузка содержимого в датафрейм
+            self.data = pd.read_excel(filename,0)
+            self.table_update()
 
-def rulew(vector, goal):
-    goal
-    result = 0
-    ab=0
-    a2=0
-    b2=0
-    size=len(goal)
-    for i in range(size):
-        ab=ab+goal[i]*vector[i]
-        a2=a2+math.pow(goal[i],2)
-        b2=b2+math.pow(vector[i],2)
-    result=ab/(math.sqrt(a2)*math.sqrt(b2)) 
-    return result
+    # сохранение файла
+    def save_file_as(self):
+        filename = fd.asksaveasfilename(
+            initialfile ="Рейтинг"+str(datetime.date.today()),
+            defaultextension=".xlsx",
+            initialdir=r'C:\\')
+        with pd.ExcelWriter(filename) as writer:
+            self.data.to_excel(writer)
 
-def ruleb(vector, goal):
-    goal
-    result = 0
-    ab=0
-    a2=0
-    size=len(goal)
-    for i in range(size):
-        ab=ab+goal[i]*vector[i]
-        a2=a2+math.pow(goal[i],2)
-    result=ab*100/a2 
-    return result
+    def target_proximity(self, vector, goal):
+        goal
+        result1 = result2 = 0
+        ab=0
+        a2=0
+        b2=0
+        size=len(goal)
+        for i in range(size):
+            if vector[i] == 0 and self.no_pass.get() == 0:
+                return [0, 0]
+            else: 
+                ab=ab+goal[i]*vector[i]
+                a2=a2+math.pow(goal[i],2)
+                b2=b2+math.pow(vector[i],2)
+        result1=ab/(math.sqrt(a2)*math.sqrt(b2)) 
+        result2=ab*100/a2
+        return [result1, result2]
 
-def rate_up():
-    global data
-    # переводим зачет и незачет в числовые эквиваленты
-    credit_map = {'незачет': 2, 'зачет': 3}
-    data=data.replace(credit_map)
-    # отделяем цель (предполагаем что цель всегда 1 строка)
-    goal = data.loc[0]['экзамен1':].values.tolist()
-    # временный датафрейм для удобства вычислений
-    newdata=data[1:].copy()
-    # применяем формулы к данным
-    newdata['w'] = data.apply(lambda x: rulew(x.loc['экзамен1':].values.tolist(), goal), axis =  1)
-    newdata['b'] = data.apply(lambda x: ruleb(x.loc['экзамен1':].values.tolist(), goal), axis =  1)
-    # сортировка по убыванию
-    data = newdata.sort_values(['b','w'],ascending=[False, False])
-    save_button.configure(state=tk.ACTIVE)
-    rate_button.configure(state=tk.DISABLED)
-    table_update()
+    def rate_up(self):
+        # переводим зачет и незачет в числовые эквиваленты
+        # временный датафрейм для удобства вычислений
+        df=self.data.copy()
+        credit_map = {'незачет': 0, 'зачет': 1}
+        df=df.replace(credit_map)
+        first_column=''
+        # проверяем присутствие только числовых значений
+        columns = df.columns.tolist()
+        types = df.dtypes.tolist()
+        try:
+            int_pos = types.index('int64')
+        except ValueError:
+            int_pos=len(columns)  
+        try:
+            float_pos = types.index('float64')
+        except ValueError:
+            float_pos=len(columns) 
+        if float_pos>-1 and int_pos<float_pos:
+            try:
+                types.index('object',int_pos)
+                tk.messagebox.showinfo(title='Ошибка', message='Данные предоставлены с ошибками. Проверьте источник информации')
+                return
+            except ValueError:
+                first_column=columns[int_pos]
+        elif int_pos>float_pos:
+            try:
+                types.index('object',float_pos)
+                tk.messagebox.showinfo(title='Ошибка', message='Данные предоставлены с ошибками. Проверьте источник информации')
+                return
+            except ValueError:
+                first_column=columns[float_pos]
+        else: 
+            tk.messagebox.showinfo(title='Ошибка', message='Данные предоставлены с ошибками. Проверьте источник информации')
+            return
+        
+        # проверяем на отрицательные значения и отмечаем неуспевающих студентов
+        for name in columns[columns.index(first_column):]:
+            if not df[df[name]<0].empty :
+                tk.messagebox.showinfo(title='Ошибка', message='В таблице присутствуют отрицательные значения.')
+                return
+            if self.no_pass.get() == 0 : df.loc[(df[name]==2), name] = 0
 
-# строка для ввода имени файла и кнопка для вызова файлового диалога
-open_button = ttk.Button(frame_filedialog, text='Открыть файл', command=select_file)
-text = tk.StringVar(frame_filedialog)
-open_textbox = ttk.Entry(frame_filedialog,textvariable=text)
-open_textbox.place(relx=0.01, rely=0.2, relwidth=0.6, relheight=0.6)
-open_button.place(relx=0.62, rely=0.2, relwidth=0.15, relheight=0.6)
+        # отделяем цель 
+        if self.no_goal.get()==0:
+            goal = df.loc[0][first_column:].values.tolist()
+            self.data=self.data[1:].copy()
+            df=df[1:].copy()
+        else:
+            window= GoalSetter(self, columns[columns.index(first_column):])
+            goal, answer = window.open()
+            if answer > 0: return
+        
+        # применяем формулы к данным
+        self.data[['Приближенность к цели','Успешность, %']] = df.apply(lambda x: pd.Series(self.target_proximity(x.loc[first_column:].values.tolist(),goal)), axis =  1)
+        # сортировка по убыванию
+        self.data = self.data.sort_values(['Успешность, %','Приближенность к цели'],ascending=[False, False]).reset_index(drop=True)
+        self.save_button.configure(state=tk.ACTIVE)
+        self.rate_button.configure(state=tk.DISABLED)
+        self.table_update()
 
-# место для отображения таблицы с данными
-table = ttk.Treeview(frame_view, show='headings')
-scroll_pane_y =ttk.Scrollbar(frame_view, command=table.yview)
-scroll_pane_x =ttk.Scrollbar(frame_view, command=table.xview, orient='horizontal')
-table.configure(yscrollcommand=scroll_pane_y.set, xscrollcommand=scroll_pane_x.set)
-scroll_pane_y.pack(side=tk.RIGHT, fill=tk.Y)
-scroll_pane_x.pack(side=tk.BOTTOM, fill=tk.X)
-table.pack(expand=tk.YES, fill=tk.BOTH)
-
-#конпки сохранения и оценки 
-rate_button = ttk.Button(frame_buttons,text='Оценить',command = rate_up)
-save_button = ttk.Button(frame_buttons, state=tk.DISABLED, text='Сохранить как',command=save_file_as)
-rate_button.place(relx=0.83, rely=0.2,relwidth=0.15, relheight=0.6)
-save_button.place(relx=0.65, rely=0.2,relwidth=0.15, relheight=0.6)
-
-root.mainloop()
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
