@@ -161,6 +161,11 @@ class App(tk.Tk):
         credit_map = {'незачет': 0, 'зачет': 1}
         df=df.replace(credit_map)
         first_column=''
+        
+        # заполняем пропущенные значения
+        df = df.replace(r'^\s+$', pd.np.nan, regex=True)
+        df.fillna(0,inplace=True)
+
         # проверяем присутствие только числовых значений
         columns = df.columns.tolist()
         types = df.dtypes.tolist()
